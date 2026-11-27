@@ -7,6 +7,7 @@ on:
       - dashboard.py
       - collect.py
       - diagnostics.py
+      - agent_report.py
       - .github/workflows/gsc-daily.yml
   schedule:
     - cron: '0 23 * * *'
@@ -68,6 +69,53 @@ jobs:
         uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa
         with:
           path: site
+      - name: Build Agent snapshot
+        if: ${{ github.event.repository.private == false && github.repository_id == '1473953409' && vars.GSC_PROPERTY == 'sc-domain:koolo.app' && vars.SEO_ALLOW_PUBLIC_REPORTS != 'false' && vars.SEO_PUBLISH_AGENT_REPORT != 'false' && github.ref == 'refs/heads/main' && vars.SEO_ENABLED == 'true' }}
+        run: python3 agent_report.py reports/gsc.json agent/latest.json
+        env:
+          REPO_PRIVATE: ${{ github.event.repository.private }}
+          SEO_ENABLED: ${{ vars.SEO_ENABLED }}
+          GSC_PROPERTY: ${{ vars.GSC_PROPERTY }}
+          SEO_ALLOW_PUBLIC_REPORTS: ${{ vars.SEO_ALLOW_PUBLIC_REPORTS }}
+          SEO_PUBLISH_AGENT_REPORT: ${{ vars.SEO_PUBLISH_AGENT_REPORT }}
+      - name: Upload Agent snapshot
+        if: ${{ github.event.repository.private == false && github.repository_id == '1473953409' && vars.GSC_PROPERTY == 'sc-domain:koolo.app' && vars.SEO_ALLOW_PUBLIC_REPORTS != 'false' && vars.SEO_PUBLISH_AGENT_REPORT != 'false' && github.ref == 'refs/heads/main' && vars.SEO_ENABLED == 'true' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: seo-agent-snapshot
+          path: agent/latest.json
+          retention-days: 7
+          if-no-files-found: error
+  publish-agent:
+    needs: collect
+    if: ${{ github.event.repository.private == false && github.repository_id == '1473953409' && vars.GSC_PROPERTY == 'sc-domain:koolo.app' && vars.SEO_ALLOW_PUBLIC_REPORTS != 'false' && vars.SEO_PUBLISH_AGENT_REPORT != 'false' && github.ref == 'refs/heads/main' && vars.SEO_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: seo-agent-snapshot
+          path: snapshot
+      - name: Publish latest-only report branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        working-directory: snapshot
+        run: |
+          set -euo pipefail
+          test "$(gh api repos/magic76/crew-seo --jq .private)" = false
+          test -s latest.json
+          git init -q
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          gh auth setup-git
+          git remote add origin https://github.com/magic76/crew-seo.git
+          git add -- latest.json
+          git commit -qm "Publish latest Koolo SEO Agent snapshot"
+          old="$(git ls-remote --heads origin refs/heads/seo-report | cut -f1)"
+          test "$(gh api repos/magic76/crew-seo --jq .private)" = false
+          git push --force-with-lease=refs/heads/seo-report:"$old" origin HEAD:refs/heads/seo-report
   deploy:
     needs: collect
     if: ${{ github.event.repository.private == false && github.repository_id == '1473953409' && vars.GSC_PROPERTY == 'sc-domain:koolo.app' && vars.SEO_ALLOW_PUBLIC_REPORTS != 'false' && vars.SEO_PUBLISH_PAGES != 'false' && github.ref == 'refs/heads/main' && vars.SEO_ENABLED == 'true' }}
