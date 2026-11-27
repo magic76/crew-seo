@@ -1,0 +1,46 @@
+name: GSC daily
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 23 * * *'
+permissions:
+  contents: read
+concurrency:
+  group: gsc-daily
+  cancel-in-progress: false
+jobs:
+  collect:
+    if: ${{ github.event.repository.private == true && github.ref == 'refs/heads/main' && vars.SEO_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - run: python3 -m unittest discover -s tests -v
+      - name: Authenticate to Google
+        id: auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/webmasters.readonly
+          create_credentials_file: false
+          export_environment_variables: false
+      - name: Collect
+        run: python3 collect.py
+        env:
+          GSC_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          GSC_PROPERTY: ${{ vars.GSC_PROPERTY }}
+          SEO_ENABLED: ${{ vars.SEO_ENABLED }}
+          REPO_PRIVATE: ${{ github.event.repository.private }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: gsc-report
+          path: reports/gsc.json
+          if-no-files-found: error
+          retention-days: 7
