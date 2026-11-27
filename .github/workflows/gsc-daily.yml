@@ -9,6 +9,8 @@ on:
       - diagnostics.py
       - agent_report.py
       - .github/workflows/gsc-daily.yml
+      - affiliate_collect.py
+      - tests/test_affiliate_collect.py
   schedule:
     - cron: '0 23 * * *'
 permissions:
@@ -135,3 +137,30 @@ jobs:
       - name: Deploy Pages
         id: deployment
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e
+
+  collect-affiliate:
+    if: github.repository == 'magic76/crew-seo' && github.ref == 'refs/heads/main' && vars.SEO_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - run: python3 -m unittest discover -s tests -v
+      - name: Authenticate to Google for private affiliate reports
+        id: affiliate_auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/webmasters.readonly
+          create_credentials_file: false
+          export_environment_variables: false
+      - name: Collect affiliate report to private Cloudflare storage only
+        env:
+          GSC_ACCESS_TOKEN: ${{ steps.affiliate_auth.outputs.access_token }}
+        run: python3 affiliate_collect.py
