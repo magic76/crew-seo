@@ -10,6 +10,7 @@ on:
       - agent_report.py
       - .github/workflows/gsc-daily.yml
       - affiliate_collect.py
+      - affiliate_upload.mjs
       - tests/test_affiliate_collect.py
   schedule:
     - cron: '0 23 * * *'
@@ -160,7 +161,12 @@ jobs:
           access_token_scopes: https://www.googleapis.com/auth/webmasters.readonly
           create_credentials_file: false
           export_environment_variables: false
-      - name: Collect affiliate report to private Cloudflare storage only
+      - name: Collect affiliate Google report in runner temporary storage
         env:
           GSC_ACCESS_TOKEN: ${{ steps.affiliate_auth.outputs.access_token }}
         run: python3 affiliate_collect.py
+      - name: Upload private report to Cloudflare
+        run: node affiliate_upload.mjs
+      - name: Remove temporary report
+        if: always()
+        run: rm -f -- "$RUNNER_TEMP/affiliate-gsc.json"
