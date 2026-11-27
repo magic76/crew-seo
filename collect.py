@@ -53,8 +53,17 @@ def collect(token, site, today, fetch=query):
             "query_opportunities": opportunities(periods[0]["groups"]["query"]["rows"]),
             "limitations": "Final web data, top rows only; query/page rows may omit data. Small samples are exploratory."}
 
+def collection_allowed(env):
+    if env.get("SEO_ENABLED") != "true":
+        return False
+    if env.get("REPO_PRIVATE") == "true":
+        return True
+    return (env.get("REPO_PRIVATE") == "false"
+            and env.get("ALLOW_PUBLIC_REPORTS") == "true"
+            and env.get("GSC_PROPERTY") == "sc-domain:koolo.app")
+
 def main():
-    if os.environ.get("SEO_ENABLED") != "true" or os.environ.get("REPO_PRIVATE") != "true":
+    if not collection_allowed(os.environ):
         raise SystemExit("Collection disabled")
     token = os.environ["GSC_ACCESS_TOKEN"]
     site = os.environ["GSC_PROPERTY"]

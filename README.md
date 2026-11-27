@@ -4,15 +4,16 @@ Read-only Search Console collector for Crew projects. No Gemini key or service-a
 
 ## Activate P0
 
-1. Set repository visibility to **private**.
+1. Prefer **private** visibility for ongoing operation. The owner has approved a temporary public pilot for repository ID 1473953409 and property `sc-domain:koolo.app` only.
 2. Under Settings > Secrets and variables > Actions > Variables, create:
    - GCP_WIF_PROVIDER: full Google workload identity provider resource name
    - GCP_SERVICE_ACCOUNT: Google service account email
    - GSC_PROPERTY: Search Console property, e.g. sc-domain:koolo.app
-   - SEO_ENABLED: true (only after making the repository private)
-3. Merge the bootstrap PR, then run the "GSC daily" workflow on main manually. Verify the run and download its gsc-report artifact. Scheduled runs are at 23:00 UTC (07:00 Taipei next day), subject to GitHub scheduling delays.
+   - SEO_ENABLED: true (explicitly enables collection)
+   - SEO_ALLOW_PUBLIC_REPORTS: optional; set to false to stop the temporary public pilot without changing private collection.
+3. Run the "GSC daily" workflow on main manually. Verify the run and download its gsc-report artifact. Scheduled runs are at 23:00 UTC (07:00 Taipei next day), subject to GitHub scheduling delays.
 
-The collection job is skipped unless the repository is private, main is selected and SEO_ENABLED is true. Do not change visibility back to public while reports exist. Disable collection and remove sensitive artifacts before changing visibility. Credentials and search data are never committed by the workflow. Reports are kept as private Actions artifacts for 7 days. Access is restricted to repository readers.
+Collection requires main and SEO_ENABLED=true. Private repositories are supported by default. Public collection is allowed only for the approved repository ID and Koolo property unless SEO_ALLOW_PUBLIC_REPORTS=false. Both workflow and collector enforce the policy. Reports are Actions artifacts for seven days. **On a public repository, signed-in GitHub users may download these reports, including real queries and page metrics.** Changing to private later cannot retract downloaded copies. Do not upload tokens, credentials, or report files to git or print report data to logs. To end the pilot, set SEO_ALLOW_PUBLIC_REPORTS=false or disable SEO_ENABLED, delete old public artifacts if desired, and change repository visibility to private. Do not change a private repository back to public while private reports exist.
 
 ## Data
 
@@ -22,4 +23,4 @@ Run offline tests: `python3 -m unittest discover -s tests -v`.
 
 ## Evidence cards
 
-`analyze.py` converts a collected report into `reports/evidence.json`. It separates observed totals from unverified query opportunities, preserves date ranges, and does not propose automatic changes. Selected upstream SEO Coach reference documents and MIT license are in `knowledge/seo-coach/`. No upstream hooks are installed. Real reports remain private artifacts only.
+`analyze.py` converts a collected report into `reports/evidence.json`. It separates observed totals from unverified query opportunities, preserves date ranges, and does not propose automatic changes. Selected upstream SEO Coach reference documents and MIT license are in `knowledge/seo-coach/`. No upstream hooks are installed. Real reports remain Actions artifacts only; visibility follows the repository, including the approved public pilot.

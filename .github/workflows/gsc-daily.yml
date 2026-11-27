@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   collect:
-    if: ${{ github.event.repository.private == true && github.ref == 'refs/heads/main' && vars.SEO_ENABLED == 'true' }}
+    if: ${{ github.ref == 'refs/heads/main' && vars.SEO_ENABLED == 'true' && (github.event.repository.private == true || (github.event.repository.private == false && (github.repository_id == '1473953409' && vars.GSC_PROPERTY == 'sc-domain:koolo.app' && vars.SEO_ALLOW_PUBLIC_REPORTS != 'false'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -38,6 +38,8 @@ jobs:
           GSC_PROPERTY: ${{ vars.GSC_PROPERTY }}
           SEO_ENABLED: ${{ vars.SEO_ENABLED }}
           REPO_PRIVATE: ${{ github.event.repository.private }}
+          # Owner-approved public pilot: this repository and Koolo only.
+          ALLOW_PUBLIC_REPORTS: ${{ (github.repository_id == '1473953409' && vars.GSC_PROPERTY == 'sc-domain:koolo.app' && vars.SEO_ALLOW_PUBLIC_REPORTS != 'false') }}
       - name: Generate evidence cards
         run: python3 analyze.py reports/gsc.json reports/evidence.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
