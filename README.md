@@ -16,6 +16,10 @@ The collection job is skipped unless the repository is private, main is selected
 
 ## Data
 
-Final web search data: 7-day current and previous windows, ending four days before the current date in US Pacific time. Separate site totals, daily, query and page dimensions. Query/page rows are bounded and can omit anonymized/low-volume results; never sum them to derive site totals. Opportunity rules are hypotheses, not recommendations to automatically change a page. URL inspection, durable historical storage, SEO Coach integration, AI analysis and cross-repo Issue/PR creation are later phases.
+Final web search data: 7-day current and previous windows, ending four days before the current date in US Pacific time. Separate site totals, daily, query and page dimensions. Query/page rows are bounded and can omit anonymized/low-volume results; never sum them to derive site totals. Opportunity rules are hypotheses, not recommendations to automatically change a page. URL inspection, durable historical storage, additional SEO Coach modules, AI analysis and cross-repo Issue/PR creation are later phases.
 
 Run offline tests: `python3 -m unittest discover -s tests -v`.
+
+## Evidence cards
+
+`analyze.py` converts a collected report into `reports/evidence.json`. It separates observed totals from unverified query opportunities, preserves date ranges, and does not propose automatic changes. Selected upstream SEO Coach reference documents and MIT license are in `knowledge/seo-coach/`. No upstream hooks are installed. Real reports remain private artifacts only.
