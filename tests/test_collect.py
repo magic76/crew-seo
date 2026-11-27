@@ -30,3 +30,15 @@ class CollectorTests(unittest.TestCase):
         with patch.dict("os.environ", {"SEO_ENABLED": "true", "REPO_PRIVATE": "false"}, clear=True):
             with self.assertRaises(SystemExit):
                 collect.main()
+
+    def test_public_pilot_policy(self):
+        base = {"SEO_ENABLED": "true", "REPO_PRIVATE": "false",
+                "ALLOW_PUBLIC_REPORTS": "true", "GSC_PROPERTY": "sc-domain:koolo.app"}
+        self.assertTrue(collect.collection_allowed(base))
+        for key, value in [("SEO_ENABLED", "false"), ("ALLOW_PUBLIC_REPORTS", "false"),
+                           ("GSC_PROPERTY", "sc-domain:example.com"), ("REPO_PRIVATE", "")]:
+            with self.subTest(key=key):
+                self.assertFalse(collect.collection_allowed(dict(base, **{key: value})))
+        self.assertTrue(collect.collection_allowed({"SEO_ENABLED": "true", "REPO_PRIVATE": "true"}))
+        self.assertFalse(collect.collection_allowed({"SEO_ENABLED": "false", "REPO_PRIVATE": "true"}))
+        self.assertFalse(collect.collection_allowed({"SEO_ENABLED": "true", "REPO_PRIVATE": "false"}))
