@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - dashboard.py
+      - collect.py
+      - diagnostics.py
       - .github/workflows/gsc-daily.yml
   schedule:
     - cron: '0 23 * * *'
@@ -17,7 +19,7 @@ jobs:
   collect:
     if: ${{ github.ref == 'refs/heads/main' && vars.SEO_ENABLED == 'true' && (github.event.repository.private == true || (github.event.repository.private == false && (github.repository_id == '1473953409' && vars.GSC_PROPERTY == 'sc-domain:koolo.app' && vars.SEO_ALLOW_PUBLIC_REPORTS != 'false'))) }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
       id-token: write

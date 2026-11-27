@@ -45,3 +45,16 @@ class DashboardTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             render(report,analyze(report),public=True)
         self.assertIn("other.example",render(report,analyze(report)))
+
+    def test_diagnostics_render(self):
+        report = fixture()
+        report["long_periods"] = {"28":report["periods"]}
+        report["inspection"] = {"date":"2026-11-27","eligible":1,"planned":1,
+                                "rows":[{"url":"https://koolo.app/learn","status":"observed","verdict":"PASS","coverage":"Indexed","canonical_matches":True}]}
+        report["new_query_candidates"] = report["query_opportunities"]
+        report["query_page"] = {"rows":[]}
+        output = render(report,analyze(report))
+        self.assertIn("Google 索引抽查",output)
+        self.assertIn("Indexed",output)
+        self.assertIn("最近 28 天",output)
+        self.assertIn("本期新觀察關鍵字",output)
