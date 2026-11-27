@@ -23,4 +23,14 @@ Run offline tests: `python3 -m unittest discover -s tests -v`.
 
 ## Evidence cards
 
-`analyze.py` converts a collected report into `reports/evidence.json`. It separates observed totals from unverified query opportunities, preserves date ranges, and does not propose automatic changes. Selected upstream SEO Coach reference documents and MIT license are in `knowledge/seo-coach/`. No upstream hooks are installed. Real reports remain Actions artifacts only; visibility follows the repository, including the approved public pilot.
+`analyze.py` converts a collected report into `reports/evidence.json`. It separates observed totals from unverified query opportunities, preserves date ranges, and does not propose automatic changes. Selected upstream SEO Coach reference documents and MIT license are in `knowledge/seo-coach/`. No upstream hooks are installed. Real reports are Actions artifacts; the approved public pilot also publishes a standalone HTML dashboard as described below.
+
+## Dashboard (public pilot)
+
+In repository Settings > Pages, set Build and deployment > Source to GitHub Actions. Run GSC daily on main (or wait for the daily schedule). The deployment job reports the actual Pages URL; the default project URL may inherit the owner site's custom domain. No DNS changes are required by this project.
+
+The gsc-report artifact contains dashboard.html as a standalone offline viewer, gsc.json and evidence.json. Pages receives only site/index.html, not raw JSON or credentials. The HTML includes real search terms and page metrics and is publicly accessible without sign-in. It uses no external scripts, tracking, libraries or API calls. The noindex meta tag is not access control. The dashboard displays the latest successful final-data snapshot, not live rankings.
+
+Public publication only runs on the approved repository ID and Koolo property, main, SEO_ENABLED=true, and public visibility. Set SEO_PUBLISH_PAGES=false to stop future deployments independently of collection. **Before making the repo private, disable publishing, cancel active deployment runs, and unpublish the site in Settings > Pages.** A private repository does not necessarily make an already published Pages site private. Previously downloaded/cached reports cannot be recalled. Private collection continues with downloadable dashboard.html, but never deploys Pages. A failed collection does not replace the last successfully published dashboard.
+
+Local: `python3 dashboard.py reports/gsc.json reports/evidence.json reports/dashboard.html`. Add `--public` only for the approved Koolo property. Offline tests use synthetic rows, never live data.

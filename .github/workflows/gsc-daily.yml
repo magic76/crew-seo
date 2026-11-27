@@ -1,6 +1,11 @@
 name: GSC daily
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - dashboard.py
+      - .github/workflows/gsc-daily.yml
   schedule:
     - cron: '0 23 * * *'
 permissions:
@@ -42,11 +47,41 @@ jobs:
           ALLOW_PUBLIC_REPORTS: ${{ (github.repository_id == '1473953409' && vars.GSC_PROPERTY == 'sc-domain:koolo.app' && vars.SEO_ALLOW_PUBLIC_REPORTS != 'false') }}
       - name: Generate evidence cards
         run: python3 analyze.py reports/gsc.json reports/evidence.json
+      - name: Generate standalone dashboard
+        run: python3 dashboard.py reports/gsc.json reports/evidence.json reports/dashboard.html
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: gsc-report
           path: |
             reports/gsc.json
             reports/evidence.json
+            reports/dashboard.html
           if-no-files-found: error
           retention-days: 7
+      - name: Build public dashboard
+        if: ${{ github.event.repository.private == false && github.repository_id == '1473953409' && vars.GSC_PROPERTY == 'sc-domain:koolo.app' && vars.SEO_ALLOW_PUBLIC_REPORTS != 'false' && vars.SEO_PUBLISH_PAGES != 'false' }}
+        run: python3 dashboard.py reports/gsc.json reports/evidence.json site/index.html --public
+      - name: Upload Pages artifact
+        if: ${{ github.event.repository.private == false && github.repository_id == '1473953409' && vars.GSC_PROPERTY == 'sc-domain:koolo.app' && vars.SEO_ALLOW_PUBLIC_REPORTS != 'false' && vars.SEO_PUBLISH_PAGES != 'false' }}
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa
+        with:
+          path: site
+  deploy:
+    needs: collect
+    if: ${{ github.event.repository.private == false && github.repository_id == '1473953409' && vars.GSC_PROPERTY == 'sc-domain:koolo.app' && vars.SEO_ALLOW_PUBLIC_REPORTS != 'false' && vars.SEO_PUBLISH_PAGES != 'false' && github.ref == 'refs/heads/main' && vars.SEO_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Verify repository is still public
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: test "$(gh api repos/magic76/crew-seo --jq .private)" = false
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e
