@@ -38,9 +38,13 @@ jobs:
           GSC_PROPERTY: ${{ vars.GSC_PROPERTY }}
           SEO_ENABLED: ${{ vars.SEO_ENABLED }}
           REPO_PRIVATE: ${{ github.event.repository.private }}
+      - name: Generate evidence cards
+        run: python3 analyze.py reports/gsc.json reports/evidence.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: gsc-report
-          path: reports/gsc.json
+          path: |
+            reports/gsc.json
+            reports/evidence.json
           if-no-files-found: error
           retention-days: 7
