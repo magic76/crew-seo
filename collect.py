@@ -7,6 +7,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
+from diagnostics import long_periods, inspect_sample, new_query_candidates
 
 API = "https://www.googleapis.com/webmasters/v3/sites/"
 LIMIT = 1000
@@ -71,6 +72,17 @@ def main():
         raise SystemExit("Missing configuration")
     today = dt.datetime.now(ZoneInfo("America/Los_Angeles")).date()
     report = collect(token, site, today)
+    try:
+        report["long_periods"] = long_periods(token, site, today, query)
+    except (RuntimeError, ValueError):
+        report["long_periods"] = {}
+    report["new_query_candidates"] = new_query_candidates(*report["periods"])
+    current = report["periods"][0]
+    try:
+        report["query_page"] = query(token,site,dt.date.fromisoformat(current["start"]),dt.date.fromisoformat(current["end"]),["query","page"])
+    except (RuntimeError, ValueError):
+        report["query_page"] = None
+    report["inspection"] = inspect_sample(token,site,today)
     out = Path("reports")
     out.mkdir(exist_ok=True)
     (out / "gsc.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")

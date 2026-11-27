@@ -88,6 +88,67 @@ def table(rows, label, identifier):
             f'<caption>依曝光排序 · 共 {len(ordered)} 筆</caption><thead><tr><th scope="col">{label}</th>{headers}</tr></thead>'
             f'<tbody>{"".join(body)}</tbody></table></div><p class="no-match" hidden>沒有符合的項目。</p>')
 
+def long_summary(report):
+    blocks = []
+    for length in ("28","90"):
+        periods = report.get("long_periods",{}).get(length)
+        if not periods:
+            blocks.append(f'<h3>{length} 天</h3><p class="empty">尚無資料或查詢失敗。</p>')
+            continue
+        current, previous = periods
+        blocks.append(f'<h3>最近 {length} 天</h3><p class="muted">本期 {period_label(current)} · 前期 {period_label(previous)}</p>')
+        blocks.append(cards(current,previous))
+        blocks.append(weekly_trend(current,"impressions","每週曝光"))
+        blocks.append(weekly_trend(current,"clicks","每週點擊"))
+    return "".join(blocks)
+
+def weekly_trend(period,metric,label):
+    start = dt.date.fromisoformat(period["start"])
+    end = dt.date.fromisoformat(period["end"])
+    if not 0 <= (end-start).days < 90:
+        raise ValueError("Invalid extended period")
+    data = {r["keys"][0]:r.get(metric) for r in rows_for(period,"date") if r.get("keys")}
+    groups = []
+    while start <= end:
+        stop = min(start+dt.timedelta(days=6),end)
+        values = [data.get(str(start+dt.timedelta(days=i))) for i in range((stop-start).days+1)]
+        known = [v for v in values if isinstance(v,(int,float)) and math.isfinite(v)]
+        groups.append((str(start),str(stop),sum(known) if len(known)==len(values) else None))
+        start = stop+dt.timedelta(days=1)
+    maximum = max([v for _,_,v in groups if v is not None]+[1])
+    bars = []
+    for start,stop,v in groups:
+        height = round(100*v/maximum) if v is not None else 0
+        bars.append(f'<div class="day current" title="{h(start)} ～ {h(stop)}：{number(v,metric)}"><span class="bar-label">{number(v,metric)}</span><div class="bar-track"><span class="bar" style="height:{height}%"></span></div><span class="day-label">{h(start[5:])}</span></div>')
+    return f'<h3>{label}</h3><div class="chart-scroll"><div class="chart" style="--days:{len(groups)}">{"".join(bars)}</div></div><p class="muted">按本期起日每 7 天分組；末組可能不足 7 天，缺任何一天則不顯示該組總值。</p>'
+
+def inspection_panel(report):
+    data = report.get("inspection",{})
+    rows = data.get("rows",[])
+    if not rows:
+        return '<p class="empty">尚未取得索引樣本（可能是權限、Sitemap 或 API 問題）。</p>'
+    observed = sum(r.get("status")=="observed" for r in rows)
+    passed = sum(r.get("status")=="observed" and r.get("verdict")=="PASS" for r in rows)
+    body = []
+    for row in rows:
+        status = row.get("coverage") or row.get("verdict") or "未知／查詢失敗"
+        match = row.get("canonical_matches")
+        canonical = "相同" if match is True else "不同" if match is False else "未知"
+        body.append(f'<tr><th scope="row">{h(row["url"])}</th><td>{h(status)}</td><td>{h(row.get("last_crawl") or "—")}</td><td>{canonical}</td></tr>')
+    return (f'<p>查核日 {h(data.get("date","—"))} · Sitemap 合格網址 {h(data.get("eligible","—"))} · 本輪嘗試 {len(rows)}／{h(data.get("planned","—"))} · 有回應 {observed} · PASS {passed}</p>'
+            '<div class="table-scroll" tabindex="0" aria-label="索引抽查"><table><thead><tr><th>網址</th><th>Google 索引狀態</th><th>最後檢索</th><th>Google canonical 是否相同</th></tr></thead><tbody>'
+            +"".join(body)+'</tbody></table></div><p class="muted">每天輪替最多 20 個網址，不代表全站索引率。結果為 Google 索引版本，非即時測試；非 PASS 不一定是錯誤。</p>')
+
+def query_details(report):
+    new = report.get("new_query_candidates")
+    pairs = report.get("query_page")
+    new_html = ('<p class="empty">前期資料不足或達列數上限，無法比較。</p>' if new is None
+                else table(new,"本期新觀察關鍵字","new-query-table"))
+    pair_html = ('<p class="empty">尚未取得查詢與頁面明細。</p>' if pairs is None
+                 else table(pairs["rows"],"關鍵字 · 頁面","query-page-table"))
+    return (f'<h3>本期新觀察關鍵字</h3><p class="muted">前期回傳列未出現，不代表歷史首次出現；匿名及低量列可能缺漏。</p>{new_html}'
+            f'<h3>關鍵字與頁面對應</h3><p class="muted">同一查詢可能對應不同頁面，不直接判定為蠶食。</p>{pair_html}')
+
 CSS = """
 :root{color-scheme:light dark;--bg:#f5f7fb;--panel:#fff;--ink:#172435;--muted:#526477;--line:#dce3ed;--accent:#235bcc;--prior:#9aaabd;--soft:#eaf0ff}
 @media(prefers-color-scheme:dark){:root{--bg:#101622;--panel:#192332;--ink:#eef3fc;--muted:#aebdd0;--line:#344359;--accent:#89abff;--prior:#76879c;--soft:#253657}}
@@ -126,11 +187,13 @@ def render(report, evidence, generated=None, public=False):
 <html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Crew SEO Dashboard</title><style>{CSS}</style></head>
 <body><main><header><div><p class="muted">CREW / SEARCH INTELLIGENCE</p><h1>Crew SEO Dashboard</h1><p>{h(report["property"])}</p></div><span class="tag">{h(stamp)} 更新</span></header>
 <div class="notice">{note}<br>本期 {period_label(current)}<br>前期 {period_label(previous)} · Google Search Console 最終 Web 搜尋資料</div>
-<nav aria-label="報告導覽"><a href="#overview">總覽</a><a href="#trends">趨勢</a><a href="#queries">關鍵字</a><a href="#pages">頁面</a><a href="#opportunities">改善機會</a></nav>
+<nav aria-label="報告導覽"><a href="#overview">總覽</a><a href="#trends">趨勢</a><a href="#long">28／90 天</a><a href="#inspection">索引</a><a href="#queries">關鍵字</a><a href="#pages">頁面</a><a href="#opportunities">改善機會</a></nav>
 <div id="overview">{cards(current,previous)}</div>
 <section class="panel" id="trends"><h2>每日搜尋趨勢</h2><div class="trends">{trend(current,previous,"impressions","曝光次數")}{trend(current,previous,"clicks","點擊次數")}</div></section>
 <section class="panel" id="opportunities"><h2>關鍵字改善機會</h2><p class="muted">本期曝光至少 10 次、平均排名 8～20；僅供複核，非排名預測或必改項目。</p>{table(candidates,"候選關鍵字","opportunity-table")}<p>下一步：確認實際承接頁與搜尋意圖，再決定是否調整；保留基準，14／28 天後回看。</p></section>
-<section class="panel" id="queries"><h2>搜尋關鍵字</h2>{table(rows_for(current,"query"),"關鍵字","query-table")}</section>
+<section class="panel" id="long"><h2>中長期搜尋表現</h2>{long_summary(report)}</section>
+<section class="panel" id="inspection"><h2>Google 索引抽查</h2>{inspection_panel(report)}</section>
+<section class="panel" id="queries"><h2>搜尋關鍵字</h2>{table(rows_for(current,"query"),"關鍵字","query-table")}{query_details(report)}</section>
 <section class="panel" id="pages"><h2>頁面表現</h2>{table(rows_for(current,"page"),"頁面","page-table")}</section>
 <footer>資料限制：關鍵字及頁面最多回傳各 1,000 筆，匿名／低量查詢可能缺漏。網站總數取自獨立查詢，不由表格加總。平均排名不是即時排名；比較不代表因果。<p>分析規則參考 SEO Coach（AK / AK SEO Labs）。</p></footer></main><script>{JS}</script></body></html>"""
 
