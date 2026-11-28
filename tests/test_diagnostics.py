@@ -1,7 +1,8 @@
 import datetime as dt
 import unittest
-from urllib.error import HTTPError
-from diagnostics import (sitemap_urls,sample,inspect_sample,extended_windows,long_periods,new_query_candidates)
+from urllib.error import HTTPError, URLError
+from io import BytesIO
+from diagnostics import (sitemap_urls,load_sitemap,SITEMAP,SitemapRedirectError,sample,inspect_sample,extended_windows,long_periods,new_query_candidates)
 
 class DiagnosticsTests(unittest.TestCase):
     def test_sitemap_scope(self):
@@ -40,3 +41,28 @@ class DiagnosticsTests(unittest.TestCase):
         self.assertEqual(new_query_candidates(period(["a","b"]),period(["a"])),[{"keys":["b"]}])
         self.assertIsNone(new_query_candidates(period(["b"]),period(["a"],True)))
         self.assertIsNone(new_query_candidates(period(["b"]),period([])))
+
+    def test_sitemap_retry_and_user_agent(self):
+        calls, pauses = [], []
+        class Response(BytesIO):
+            def geturl(self):
+                return SITEMAP
+        def opener(req, timeout):
+            calls.append(req)
+            self.assertEqual(req.get_header("User-agent"), "Crew-Production-SEO-Smoke/1.0")
+            if len(calls) == 1:
+                raise HTTPError(SITEMAP, 503, "temporary", None, None)
+            return Response(b"<urlset><url><loc>https://koolo.app/</loc></url></urlset>")
+        self.assertEqual(load_sitemap(opener, pauses.append), ["https://koolo.app/"])
+        self.assertEqual(pauses, [1])
+
+    def test_sitemap_failure_reason(self):
+        for exc, reason in [(HTTPError(SITEMAP,403,"denied",None,None), "http_403"),
+                            (URLError("private detail"), "network_error"),
+                            (SitemapRedirectError("redirect"), "unexpected_redirect")]:
+            def failed():
+                raise exc
+            result = inspect_sample("fake","sc-domain:koolo.app",dt.date(2026,11,28),load=failed)
+            self.assertEqual(result["status"],"sitemap_unavailable")
+            self.assertEqual(result["sitemap_error"],reason)
+            self.assertEqual(result["rows"],[])
