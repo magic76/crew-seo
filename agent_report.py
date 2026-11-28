@@ -72,8 +72,15 @@ def inspection(source):
         if not koolo_url(r.get("url","")):
             continue
         rows.append({k:r.get(k) for k in ("url","status","verdict","coverage","last_crawl","canonical_matches","http_status")})
+    reason = source.get("sitemap_error")
+    safe_reasons = {"unexpected_redirect", "invalid_xml", "invalid_sitemap", "network_error"}
+    if isinstance(reason, str) and (reason in safe_reasons or
+            (len(reason) == 8 and reason.startswith("http_") and reason[5:].isascii() and reason[5:].isdigit())):
+        extra = {"sitemap_error": reason}
+    else:
+        extra = {}
     return {**{k:source.get(k) for k in ("status","date","eligible","planned")},
-            "rows":rows,"limitation":"Rotating sample, not full coverage or live test."}
+            **extra, "rows":rows,"limitation":"Rotating sample, not full coverage or live test."}
 
 def build(report,generated_at,run_id,source_sha):
     if report.get("property") != PROPERTY:
