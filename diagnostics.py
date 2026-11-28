@@ -3,7 +3,8 @@ import datetime as dt
 import json
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
-from urllib.request import Request, urlopen
+from urllib.request import Request, urlopen, build_opener, HTTPRedirectHandler
+from time import sleep
 import xml.etree.ElementTree as ET
 
 PROPERTY = "sc-domain:koolo.app"
@@ -51,11 +52,35 @@ def sitemap_urls(xml):
                     urls.append(loc)
     return sorted(set(urls))
 
-def load_sitemap():
-    with urlopen(SITEMAP,timeout=12) as response:
-        if response.geturl() != SITEMAP:
-            raise ValueError("Unexpected sitemap redirect")
-        payload = response.read(2_000_001)
+class SitemapRedirectError(ValueError):
+    pass
+
+class NoSitemapRedirect(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise SitemapRedirectError("Unexpected sitemap redirect")
+
+def load_sitemap(open_request=None, pause=sleep):
+    # Identify this actual audit client; never impersonate Googlebot.
+    if open_request is None:
+        open_request = build_opener(NoSitemapRedirect()).open
+    req = Request(SITEMAP, headers={
+        "User-Agent": "Crew-Production-SEO-Smoke/1.0",
+        "Accept": "application/xml,text/xml;q=0.9,*/*;q=0.1",
+    })
+    for attempt in range(3):
+        try:
+            with open_request(req, timeout=12) as response:
+                if response.geturl() != SITEMAP:
+                    raise SitemapRedirectError("Unexpected sitemap redirect")
+                payload = response.read(2_000_001)
+            break
+        except HTTPError as exc:
+            if attempt == 2 or exc.code not in (429, 500, 502, 503, 504):
+                raise
+        except (URLError, TimeoutError):
+            if attempt == 2:
+                raise
+        pause(2 ** attempt)
     if len(payload) > 2_000_000:
         raise ValueError("Sitemap too large")
     return sitemap_urls(payload)
@@ -83,8 +108,21 @@ def inspect_sample(token,site,today,load=load_sitemap,inspect=inspect_url):
         return {"status":"unsupported_property","rows":[]}
     try:
         urls = load()
-    except (OSError,ValueError,ET.ParseError):
-        return {"status":"sitemap_unavailable","rows":[]}
+    except (OSError,ValueError,ET.ParseError) as exc:
+        # Fixed diagnostic values only; no response bodies, tokens or URLs in logs.
+        if isinstance(exc, HTTPError):
+            reason = "http_" + str(exc.code)
+        elif isinstance(exc, SitemapRedirectError):
+            reason = "unexpected_redirect"
+        elif isinstance(exc, ET.ParseError):
+            reason = "invalid_xml"
+        elif isinstance(exc, ValueError):
+            reason = "invalid_sitemap"
+        else:
+            reason = "network_error"
+        print("Sitemap inspection unavailable: " + reason)
+        return {"status":"sitemap_unavailable","date":str(today),
+                "sitemap_error":reason,"rows":[]}
     rows = []
     targets = sample(urls,today)
     for url in targets:
